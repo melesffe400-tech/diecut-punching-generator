@@ -1,28 +1,18 @@
-# Random Die-Cut Generator
+# Random Die-Cut Generator v2
 
 업로드한 이미지에 랜덤 펀칭을 만들고, 잘려 나온 조각을 아래에 흩뿌려 PNG로 저장하는 브라우저 전용 도구입니다.
 
-## GitHub Pages에 올리기
+## v2 변경점
 
-1. 새 GitHub 저장소를 만듭니다.
-2. `index.html`, `style.css`, `script.js`를 저장소 최상위에 업로드합니다.
-3. GitHub 저장소의 **Settings → Pages**로 이동합니다.
-4. **Deploy from a branch**를 선택합니다.
-5. Branch를 `main`, 폴더를 `/ (root)`로 지정하고 저장합니다.
-6. 잠시 뒤 생성된 GitHub Pages 주소로 접속하면 됩니다.
+- 사용자 정의 PNG 마스크 추가
+- 가로 최소 / 최대 크기 조절
+- 세로 최소 / 최대 크기 조절
+- 비율 유지 옵션 추가
+- 기본 도형의 불필요한 랜덤 찌그러짐 제거
+- 사용자 PNG는 원본 PNG의 알파(투명도)를 마스크로 사용
 
-## 특징
+## GitHub에서 기존 버전 교체하기
 
-- 서버/API 불필요
-- 업로드 이미지는 브라우저 안에서만 처리
-- 물방울 / 원 / 마름모 / 별 펀칭
-- 개수, 크기, 흩뿌림 높이, 회전, 여백 조절
-- 원본 펀칭 ON/OFF
-- 펀칭 배경: 종이색 / 흰색 / 투명
-- PNG 다운로드
+저장소 최상위의 기존 `index.html`, `style.css`, `script.js`, `README.md`를 이 압축파일의 새 파일로 교체한 뒤 Commit changes 하면 됩니다.
 
-## 파일 구조
-
-- `index.html` — 화면 구조
-- `style.css` — 디자인
-- `script.js` — 이미지 처리 및 Canvas 렌더링
+GitHub Pages는 같은 저장소를 계속 사용하므로 별도의 Pages 설정은 다시 할 필요가 없습니다.

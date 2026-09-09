@@ -24,7 +24,7 @@
       <aside class="panel">
         <label class="upload" id="dropZone">
           <input id="fileInput" type="file" accept="image/*" />
-          <span class="upload-title">이미지 업로드</span>
+          <span class="upload-title">원본 이미지 업로드</span>
           <span class="upload-desc">클릭하거나 파일을 끌어놓으세요</span>
         </label>
 
@@ -36,8 +36,15 @@
               <option value="circle">원</option>
               <option value="diamond">마름모</option>
               <option value="star">별</option>
+              <option value="custom">사용자 PNG</option>
             </select>
           </div>
+
+          <label class="mask-upload" id="maskUploadWrap" hidden>
+            <input id="maskInput" type="file" accept="image/png,image/webp,image/*" />
+            <span class="mask-title">마스크 PNG 선택</span>
+            <span class="mask-desc" id="maskStatus">투명 배경 PNG의 불투명 영역을 모양으로 사용합니다.</span>
+          </label>
 
           <div class="control">
             <div class="control-head">
@@ -47,21 +54,44 @@
             <input id="count" type="range" min="4" max="80" value="24" />
           </div>
 
-          <div class="control">
-            <div class="control-head">
-              <label for="minSize">최소 크기</label>
-              <output id="minSizeOut">22px</output>
+          <div class="size-grid">
+            <div class="control">
+              <div class="control-head">
+                <label for="minW">가로 최소</label>
+                <output id="minWOut">24px</output>
+              </div>
+              <input id="minW" type="range" min="8" max="240" value="24" />
             </div>
-            <input id="minSize" type="range" min="8" max="80" value="22" />
+
+            <div class="control">
+              <div class="control-head">
+                <label for="maxW">가로 최대</label>
+                <output id="maxWOut">56px</output>
+              </div>
+              <input id="maxW" type="range" min="12" max="320" value="56" />
+            </div>
+
+            <div class="control">
+              <div class="control-head">
+                <label for="minH">세로 최소</label>
+                <output id="minHOut">24px</output>
+              </div>
+              <input id="minH" type="range" min="8" max="240" value="24" />
+            </div>
+
+            <div class="control">
+              <div class="control-head">
+                <label for="maxH">세로 최대</label>
+                <output id="maxHOut">56px</output>
+              </div>
+              <input id="maxH" type="range" min="12" max="320" value="56" />
+            </div>
           </div>
 
-          <div class="control">
-            <div class="control-head">
-              <label for="maxSize">최대 크기</label>
-              <output id="maxSizeOut">52px</output>
-            </div>
-            <input id="maxSize" type="range" min="16" max="140" value="52" />
-          </div>
+          <label class="check-line">
+            <input id="lockRatio" type="checkbox" checked />
+            <span>비율 유지</span>
+          </label>
 
           <div class="control">
             <div class="control-head">
@@ -114,7 +144,7 @@
         </div>
 
         <p class="tip">
-          같은 설정에서도 “다시 랜덤”을 누를 때마다 위치·크기·회전이 새로 생성됩니다.
+          사용자 PNG는 투명 배경을 권장합니다. 비율 유지가 켜져 있으면 원은 원형을 유지하고, 사용자 PNG는 원본 비율을 유지합니다.
         </p>
       </aside>
 

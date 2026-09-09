@@ -47,7 +47,7 @@ h1 { margin: 0; font-size: clamp(28px, 4vw, 52px); line-height: 1; letter-spacin
 
 .workspace {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 340px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -59,10 +59,9 @@ h1 { margin: 0; font-size: clamp(28px, 4vw, 52px); line-height: 1; letter-spacin
 }
 .panel { padding: 16px; position: sticky; top: 16px; }
 
-.upload {
+.upload, .mask-upload {
   border: 1px dashed #b8b2a5;
   border-radius: 14px;
-  min-height: 116px;
   display: grid;
   place-content: center;
   text-align: center;
@@ -70,10 +69,12 @@ h1 { margin: 0; font-size: clamp(28px, 4vw, 52px); line-height: 1; letter-spacin
   background: rgba(255,255,255,.65);
   transition: .2s ease;
 }
-.upload:hover, .upload.dragging { border-color: #68645c; background: white; transform: translateY(-1px); }
-.upload input { display: none; }
-.upload-title { font-weight: 750; }
-.upload-desc { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
+.upload { min-height: 116px; }
+.mask-upload { min-height: 92px; }
+.upload:hover, .upload.dragging, .mask-upload:hover { border-color: #68645c; background: white; transform: translateY(-1px); }
+.upload input, .mask-upload input { display: none; }
+.upload-title, .mask-title { font-weight: 750; }
+.upload-desc, .mask-desc { display: block; font-size: 12px; color: var(--muted); margin-top: 5px; }
 
 .controls { display: grid; gap: 16px; margin-top: 20px; }
 .control { display: grid; gap: 8px; }
@@ -91,6 +92,15 @@ select {
   color: var(--ink);
 }
 
+.size-grid { display: grid; gap: 13px; }
+.check-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -4px;
+}
+.check-line input, .toggle-row input { accent-color: var(--accent); }
+
 .toggle-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .toggle-row label {
   display: flex; align-items: center; gap: 7px;
@@ -99,7 +109,6 @@ select {
   border-radius: 10px;
   background: white;
 }
-.toggle-row input { accent-color: var(--accent); }
 
 .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
 button {

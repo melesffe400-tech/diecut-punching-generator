@@ -1,7 +1,10 @@
 const $ = (id) => document.getElementById(id);
 
 const fileInput = $("fileInput");
+const maskInput = $("maskInput");
 const dropZone = $("dropZone");
+const maskUploadWrap = $("maskUploadWrap");
+const maskStatus = $("maskStatus");
 const canvas = $("canvas");
 const ctx = canvas.getContext("2d");
 const emptyState = $("emptyState");
@@ -10,8 +13,11 @@ const status = $("status");
 const controls = {
   shape: $("shape"),
   count: $("count"),
-  minSize: $("minSize"),
-  maxSize: $("maxSize"),
+  minW: $("minW"),
+  maxW: $("maxW"),
+  minH: $("minH"),
+  maxH: $("maxH"),
+  lockRatio: $("lockRatio"),
   scatter: $("scatter"),
   rotation: $("rotation"),
   margin: $("margin"),
@@ -22,8 +28,10 @@ const controls = {
 
 const outputs = {
   count: $("countOut"),
-  minSize: $("minSizeOut"),
-  maxSize: $("maxSizeOut"),
+  minW: $("minWOut"),
+  maxW: $("maxWOut"),
+  minH: $("minHOut"),
+  maxH: $("maxHOut"),
   scatter: $("scatterOut"),
   rotation: $("rotationOut"),
   margin: $("marginOut"),
@@ -35,88 +43,313 @@ const fitButton = $("fitButton");
 
 let sourceImage = null;
 let sourceName = "diecut";
+let maskImage = null;
+let maskCanvas = null;
 let cuts = [];
-let displayScale = 1;
+let syncingRatio = false;
 
 function syncOutputs() {
   outputs.count.value = controls.count.value;
-  outputs.minSize.value = `${controls.minSize.value}px`;
-  outputs.maxSize.value = `${controls.maxSize.value}px`;
+  outputs.minW.value = `${controls.minW.value}px`;
+  outputs.maxW.value = `${controls.maxW.value}px`;
+  outputs.minH.value = `${controls.minH.value}px`;
+  outputs.maxH.value = `${controls.maxH.value}px`;
   outputs.scatter.value = `${controls.scatter.value}%`;
   outputs.rotation.value = `${controls.rotation.value}°`;
   outputs.margin.value = `${controls.margin.value}%`;
 }
 syncOutputs();
 
-function seededRandom(min, max) {
+function rand(min, max) {
   return min + Math.random() * (max - min);
 }
 
-function makePath(shape, size) {
+function clampPair(a, b) {
+  return a <= b ? [a, b] : [b, a];
+}
+
+function getMaskAspect() {
+  if (controls.shape.value === "custom" && maskImage) {
+    return maskImage.width / maskImage.height;
+  }
+  return 1;
+}
+
+function getDimensions() {
+  let [minW, maxW] = clampPair(Number(controls.minW.value), Number(controls.maxW.value));
+  let [minH, maxH] = clampPair(Number(controls.minH.value), Number(controls.maxH.value));
+
+  if (!controls.lockRatio.checked) {
+    return { minW, maxW, minH, maxH };
+  }
+
+  const aspect = getMaskAspect();
+
+  // Width is the master value while ratio lock is on.
+  minH = Math.max(1, Math.round(minW / aspect));
+  maxH = Math.max(1, Math.round(maxW / aspect));
+
+  return { minW, maxW, minH, maxH };
+}
+
+function syncLockedHeightFromWidth() {
+  if (!controls.lockRatio.checked || syncingRatio) return;
+  syncingRatio = true;
+  const aspect = getMaskAspect();
+  controls.minH.value = Math.min(Number(controls.minH.max), Math.max(Number(controls.minH.min), Math.round(Number(controls.minW.value) / aspect)));
+  controls.maxH.value = Math.min(Number(controls.maxH.max), Math.max(Number(controls.maxH.min), Math.round(Number(controls.maxW.value) / aspect)));
+  syncOutputs();
+  syncingRatio = false;
+}
+
+function syncLockedWidthFromHeight() {
+  if (!controls.lockRatio.checked || syncingRatio) return;
+  syncingRatio = true;
+  const aspect = getMaskAspect();
+  controls.minW.value = Math.min(Number(controls.minW.max), Math.max(Number(controls.minW.min), Math.round(Number(controls.minH.value) * aspect)));
+  controls.maxW.value = Math.min(Number(controls.maxW.max), Math.max(Number(controls.maxW.min), Math.round(Number(controls.maxH.value) * aspect)));
+  syncOutputs();
+  syncingRatio = false;
+}
+
+function makeVectorPath(shape, width, height) {
   const p = new Path2D();
-  const r = size / 2;
+  const rx = width / 2;
+  const ry = height / 2;
 
   if (shape === "circle") {
-    p.arc(0, 0, r, 0, Math.PI * 2);
+    p.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
   } else if (shape === "diamond") {
-    p.moveTo(0, -r);
-    p.lineTo(r * 0.78, 0);
-    p.lineTo(0, r);
-    p.lineTo(-r * 0.78, 0);
+    p.moveTo(0, -ry);
+    p.lineTo(rx, 0);
+    p.lineTo(0, ry);
+    p.lineTo(-rx, 0);
     p.closePath();
   } else if (shape === "star") {
-    const outer = r, inner = r * 0.46;
     for (let i = 0; i < 10; i++) {
-      const rr = i % 2 === 0 ? outer : inner;
+      const outer = i % 2 === 0;
+      const xRad = outer ? rx : rx * 0.46;
+      const yRad = outer ? ry : ry * 0.46;
       const a = -Math.PI / 2 + i * Math.PI / 5;
-      const x = Math.cos(a) * rr;
-      const y = Math.sin(a) * rr;
+      const x = Math.cos(a) * xRad;
+      const y = Math.sin(a) * yRad;
       i === 0 ? p.moveTo(x, y) : p.lineTo(x, y);
     }
     p.closePath();
   } else {
-    // Teardrop: pointed top, rounded lower body.
-    p.moveTo(0, -r);
-    p.bezierCurveTo(r * 0.16, -r * 0.58, r * 0.78, -r * 0.08, r * 0.78, r * 0.34);
-    p.bezierCurveTo(r * 0.78, r * 0.84, r * 0.40, r, 0, r);
-    p.bezierCurveTo(-r * 0.40, r, -r * 0.78, r * 0.84, -r * 0.78, r * 0.34);
-    p.bezierCurveTo(-r * 0.78, -r * 0.08, -r * 0.16, -r * 0.58, 0, -r);
+    p.moveTo(0, -ry);
+    p.bezierCurveTo(rx * 0.18, -ry * 0.58, rx * 0.80, -ry * 0.10, rx * 0.80, ry * 0.33);
+    p.bezierCurveTo(rx * 0.80, ry * 0.84, rx * 0.42, ry, 0, ry);
+    p.bezierCurveTo(-rx * 0.42, ry, -rx * 0.80, ry * 0.84, -rx * 0.80, ry * 0.33);
+    p.bezierCurveTo(-rx * 0.80, -ry * 0.10, -rx * 0.18, -ry * 0.58, 0, -ry);
     p.closePath();
   }
   return p;
 }
 
+function createMaskCanvas(img) {
+  const c = document.createElement("canvas");
+  c.width = img.width;
+  c.height = img.height;
+  const cctx = c.getContext("2d");
+  cctx.clearRect(0, 0, c.width, c.height);
+  cctx.drawImage(img, 0, 0);
+  return c;
+}
+
+function createCustomClipCanvas(width, height) {
+  if (!maskCanvas) return null;
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(width));
+  c.height = Math.max(1, Math.round(height));
+  const cctx = c.getContext("2d");
+  cctx.clearRect(0, 0, c.width, c.height);
+  cctx.drawImage(maskCanvas, 0, 0, c.width, c.height);
+  return c;
+}
+
 function generateCuts() {
   if (!sourceImage) return;
 
-  const count = Number(controls.count.value);
-  let minSize = Number(controls.minSize.value);
-  let maxSize = Number(controls.maxSize.value);
-  if (minSize > maxSize) [minSize, maxSize] = [maxSize, minSize];
+  if (controls.shape.value === "custom" && !maskImage) {
+    cuts = [];
+    render();
+    status.textContent = "사용자 PNG 마스크를 선택해 주세요.";
+    return;
+  }
 
-  const margin = Math.min(sourceImage.width, sourceImage.height) * Number(controls.margin.value) / 100;
+  const count = Number(controls.count.value);
+  const { minW, maxW, minH, maxH } = getDimensions();
+
+  const marginPx = Math.min(sourceImage.width, sourceImage.height) * Number(controls.margin.value) / 100;
   const topH = sourceImage.height;
   const scatterH = Math.round(topH * Number(controls.scatter.value) / 100);
 
   cuts = Array.from({ length: count }, () => {
-    const size = seededRandom(minSize, maxSize);
-    const safe = Math.max(size * 0.9, margin);
-    const sx = seededRandom(safe, Math.max(safe, sourceImage.width - safe));
-    const sy = seededRandom(safe, Math.max(safe, sourceImage.height - safe));
+    let w = rand(minW, maxW);
+    let h;
 
-    const lowerPad = size;
-    const dx = seededRandom(lowerPad, Math.max(lowerPad, sourceImage.width - lowerPad));
-    const dy = topH + seededRandom(size, Math.max(size, scatterH - size));
+    if (controls.lockRatio.checked) {
+      const aspect = getMaskAspect();
+      h = w / aspect;
+    } else {
+      h = rand(minH, maxH);
+    }
+
+    const safeX = Math.max(w * 0.55, marginPx);
+    const safeY = Math.max(h * 0.55, marginPx);
+    const sx = rand(safeX, Math.max(safeX, sourceImage.width - safeX));
+    const sy = rand(safeY, Math.max(safeY, sourceImage.height - safeY));
+
+    const dx = rand(w * 0.6, Math.max(w * 0.6, sourceImage.width - w * 0.6));
+    const dy = topH + rand(h * 0.6, Math.max(h * 0.6, scatterH - h * 0.6));
 
     return {
-      sx, sy, dx, dy, size,
-      sourceRotation: seededRandom(-12, 12) * Math.PI / 180,
-      destRotation: seededRandom(-Number(controls.rotation.value), Number(controls.rotation.value)) * Math.PI / 180,
-      stretchX: seededRandom(0.78, 1.18),
-      stretchY: seededRandom(0.86, 1.22),
+      sx, sy, dx, dy, w, h,
+      sourceRotation: rand(-10, 10) * Math.PI / 180,
+      destRotation: rand(-Number(controls.rotation.value), Number(controls.rotation.value)) * Math.PI / 180,
     };
   });
+
   render();
+}
+
+function fillVectorHole(cut) {
+  ctx.save();
+  ctx.translate(cut.sx, cut.sy);
+  ctx.rotate(cut.sourceRotation);
+  const path = makeVectorPath(controls.shape.value, cut.w, cut.h);
+
+  if (controls.holeMode.value === "transparent") {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fill(path);
+    ctx.globalCompositeOperation = "source-over";
+  } else {
+    ctx.fillStyle = controls.holeMode.value === "white" ? "#ffffff" : "#fbfaf7";
+    ctx.fill(path);
+  }
+
+  if (controls.outline.checked) {
+    ctx.strokeStyle = "rgba(70, 68, 63, .28)";
+    ctx.lineWidth = Math.max(1, Math.min(cut.w, cut.h) * 0.025);
+    ctx.stroke(path);
+  }
+  ctx.restore();
+}
+
+function fillCustomHole(cut) {
+  const mask = createCustomClipCanvas(cut.w, cut.h);
+  if (!mask) return;
+
+  const temp = document.createElement("canvas");
+  temp.width = canvas.width;
+  temp.height = canvas.height;
+  const t = temp.getContext("2d");
+
+  t.save();
+  t.translate(cut.sx, cut.sy);
+  t.rotate(cut.sourceRotation);
+  t.drawImage(mask, -cut.w / 2, -cut.h / 2, cut.w, cut.h);
+  t.restore();
+
+  if (controls.holeMode.value === "transparent") {
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.drawImage(temp, 0, 0);
+    ctx.restore();
+  } else {
+    const fillLayer = document.createElement("canvas");
+    fillLayer.width = canvas.width;
+    fillLayer.height = canvas.height;
+    const f = fillLayer.getContext("2d");
+    f.fillStyle = controls.holeMode.value === "white" ? "#ffffff" : "#fbfaf7";
+    f.fillRect(0, 0, fillLayer.width, fillLayer.height);
+    f.globalCompositeOperation = "destination-in";
+    f.drawImage(temp, 0, 0);
+    ctx.drawImage(fillLayer, 0, 0);
+  }
+
+  if (controls.outline.checked) {
+    // Soft outline via mask expansion approximation.
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.globalCompositeOperation = "source-over";
+    const offsets = [[-1,0],[1,0],[0,-1],[0,1]];
+    for (const [ox, oy] of offsets) {
+      ctx.drawImage(temp, ox, oy);
+    }
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.drawImage(temp, 0, 0);
+    ctx.restore();
+  }
+}
+
+function drawVectorFragment(cut) {
+  ctx.save();
+  ctx.translate(cut.dx, cut.dy);
+  ctx.rotate(cut.destRotation);
+  const path = makeVectorPath(controls.shape.value, cut.w, cut.h);
+  ctx.clip(path);
+
+  ctx.drawImage(
+    sourceImage,
+    cut.sx - cut.w / 2, cut.sy - cut.h / 2,
+    cut.w, cut.h,
+    -cut.w / 2, -cut.h / 2,
+    cut.w, cut.h
+  );
+  ctx.restore();
+
+  if (controls.outline.checked) {
+    ctx.save();
+    ctx.translate(cut.dx, cut.dy);
+    ctx.rotate(cut.destRotation);
+    const path = makeVectorPath(controls.shape.value, cut.w, cut.h);
+    ctx.strokeStyle = "rgba(70, 68, 63, .24)";
+    ctx.lineWidth = Math.max(1, Math.min(cut.w, cut.h) * 0.025);
+    ctx.stroke(path);
+    ctx.restore();
+  }
+}
+
+function drawCustomFragment(cut) {
+  const mask = createCustomClipCanvas(cut.w, cut.h);
+  if (!mask) return;
+
+  const piece = document.createElement("canvas");
+  piece.width = Math.max(1, Math.ceil(cut.w));
+  piece.height = Math.max(1, Math.ceil(cut.h));
+  const pctx = piece.getContext("2d");
+
+  pctx.drawImage(
+    sourceImage,
+    cut.sx - cut.w / 2, cut.sy - cut.h / 2,
+    cut.w, cut.h,
+    0, 0, piece.width, piece.height
+  );
+  pctx.globalCompositeOperation = "destination-in";
+  pctx.drawImage(mask, 0, 0, piece.width, piece.height);
+  pctx.globalCompositeOperation = "source-over";
+
+  ctx.save();
+  ctx.translate(cut.dx, cut.dy);
+  ctx.rotate(cut.destRotation);
+  ctx.drawImage(piece, -cut.w / 2, -cut.h / 2, cut.w, cut.h);
+  ctx.restore();
+
+  if (controls.outline.checked) {
+    ctx.save();
+    ctx.translate(cut.dx, cut.dy);
+    ctx.rotate(cut.destRotation);
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(mask, -cut.w / 2 - 1, -cut.h / 2, cut.w, cut.h);
+    ctx.drawImage(mask, -cut.w / 2 + 1, -cut.h / 2, cut.w, cut.h);
+    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2 - 1, cut.w, cut.h);
+    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2 + 1, cut.w, cut.h);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2, cut.w, cut.h);
+    ctx.restore();
+  }
 }
 
 function render() {
@@ -131,71 +364,20 @@ function render() {
   canvas.height = H;
   ctx.clearRect(0, 0, W, H);
 
-  // Paper background for composition. Transparent holes are punched after this.
   ctx.fillStyle = "#fbfaf7";
   ctx.fillRect(0, 0, W, H);
-
   ctx.drawImage(sourceImage, 0, 0);
 
-  // Draw holes in the original.
   if (controls.showHoles.checked) {
     for (const cut of cuts) {
-      ctx.save();
-      ctx.translate(cut.sx, cut.sy);
-      ctx.rotate(cut.sourceRotation);
-      ctx.scale(cut.stretchX, cut.stretchY);
-
-      const path = makePath(controls.shape.value, cut.size);
-      if (controls.holeMode.value === "transparent") {
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.fill(path);
-        ctx.globalCompositeOperation = "source-over";
-      } else {
-        ctx.fillStyle = controls.holeMode.value === "white" ? "#ffffff" : "#fbfaf7";
-        ctx.fill(path);
-      }
-
-      if (controls.outline.checked) {
-        ctx.strokeStyle = "rgba(70, 68, 63, .28)";
-        ctx.lineWidth = Math.max(1, cut.size * 0.025);
-        ctx.stroke(path);
-      }
-      ctx.restore();
+      if (controls.shape.value === "custom") fillCustomHole(cut);
+      else fillVectorHole(cut);
     }
   }
 
-  // Scatter extracted image fragments below.
   for (const cut of cuts) {
-    ctx.save();
-    ctx.translate(cut.dx, cut.dy);
-    ctx.rotate(cut.destRotation);
-    ctx.scale(cut.stretchX, cut.stretchY);
-
-    const path = makePath(controls.shape.value, cut.size);
-    ctx.clip(path);
-
-    // Keep the fragment's texture tied to the sampled source coordinate.
-    ctx.rotate(-cut.sourceRotation);
-    ctx.drawImage(
-      sourceImage,
-      cut.sx - cut.size, cut.sy - cut.size,
-      cut.size * 2, cut.size * 2,
-      -cut.size, -cut.size,
-      cut.size * 2, cut.size * 2
-    );
-    ctx.restore();
-
-    if (controls.outline.checked) {
-      ctx.save();
-      ctx.translate(cut.dx, cut.dy);
-      ctx.rotate(cut.destRotation);
-      ctx.scale(cut.stretchX, cut.stretchY);
-      const path = makePath(controls.shape.value, cut.size);
-      ctx.strokeStyle = "rgba(70, 68, 63, .24)";
-      ctx.lineWidth = Math.max(1, cut.size * 0.025);
-      ctx.stroke(path);
-      ctx.restore();
-    }
+    if (controls.shape.value === "custom") drawCustomFragment(cut);
+    else drawVectorFragment(cut);
   }
 
   emptyState.hidden = true;
@@ -207,50 +389,66 @@ function fitCanvas() {
   if (!sourceImage) return;
   const shell = $("canvasShell");
   const maxW = Math.max(220, shell.clientWidth - 44);
-  displayScale = Math.min(1, maxW / canvas.width);
+  const displayScale = Math.min(1, maxW / canvas.width);
   canvas.style.width = `${Math.round(canvas.width * displayScale)}px`;
   canvas.style.height = `${Math.round(canvas.height * displayScale)}px`;
 }
 
-async function loadFile(file) {
+function tuneSizeControls(img) {
+  const base = Math.min(img.width, img.height);
+  const minDefault = Math.max(8, Math.round(base * 0.035));
+  const maxDefault = Math.max(minDefault + 6, Math.round(base * 0.08));
+
+  for (const id of ["minW", "minH"]) controls[id].max = Math.max(120, Math.round(base * 0.28));
+  for (const id of ["maxW", "maxH"]) controls[id].max = Math.max(200, Math.round(base * 0.40));
+
+  controls.minW.value = minDefault;
+  controls.maxW.value = maxDefault;
+  controls.minH.value = minDefault;
+  controls.maxH.value = maxDefault;
+  syncOutputs();
+}
+
+function loadImageFile(file, onLoaded) {
   if (!file || !file.type.startsWith("image/")) {
     alert("이미지 파일을 선택해 주세요.");
     return;
   }
-
-  sourceName = (file.name || "diecut").replace(/\.[^.]+$/, "");
   const url = URL.createObjectURL(file);
   const img = new Image();
-
   img.onload = () => {
-    sourceImage = img;
-    randomizeBtn.disabled = false;
-    downloadBtn.disabled = false;
-    fitButton.disabled = false;
     URL.revokeObjectURL(url);
-
-    // Scale control defaults to image size so tiny/huge images remain usable.
-    const base = Math.min(img.width, img.height);
-    const minDefault = Math.max(8, Math.round(base * 0.035));
-    const maxDefault = Math.max(minDefault + 6, Math.round(base * 0.08));
-    controls.minSize.max = Math.max(100, Math.round(base * 0.20));
-    controls.maxSize.max = Math.max(180, Math.round(base * 0.32));
-    controls.minSize.value = Math.min(Number(controls.minSize.max), minDefault);
-    controls.maxSize.value = Math.min(Number(controls.maxSize.max), maxDefault);
-    syncOutputs();
-
-    generateCuts();
+    onLoaded(img, file);
   };
-
   img.onerror = () => {
     URL.revokeObjectURL(url);
     alert("이미지를 읽을 수 없습니다.");
   };
-
   img.src = url;
 }
 
-fileInput.addEventListener("change", (e) => loadFile(e.target.files[0]));
+fileInput.addEventListener("change", (e) => {
+  loadImageFile(e.target.files[0], (img, file) => {
+    sourceImage = img;
+    sourceName = (file.name || "diecut").replace(/\.[^.]+$/, "");
+    randomizeBtn.disabled = false;
+    downloadBtn.disabled = false;
+    fitButton.disabled = false;
+    tuneSizeControls(img);
+    if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+    generateCuts();
+  });
+});
+
+maskInput.addEventListener("change", (e) => {
+  loadImageFile(e.target.files[0], (img, file) => {
+    maskImage = img;
+    maskCanvas = createMaskCanvas(img);
+    maskStatus.textContent = `${file.name} · ${img.width}×${img.height}px`;
+    if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+    generateCuts();
+  });
+});
 
 ["dragenter", "dragover"].forEach(type => {
   dropZone.addEventListener(type, (e) => {
@@ -264,36 +462,72 @@ fileInput.addEventListener("change", (e) => loadFile(e.target.files[0]));
     dropZone.classList.remove("dragging");
   });
 });
-dropZone.addEventListener("drop", (e) => loadFile(e.dataTransfer.files[0]));
+dropZone.addEventListener("drop", (e) => {
+  const file = e.dataTransfer.files[0];
+  loadImageFile(file, (img, f) => {
+    sourceImage = img;
+    sourceName = (f.name || "diecut").replace(/\.[^.]+$/, "");
+    randomizeBtn.disabled = false;
+    downloadBtn.disabled = false;
+    fitButton.disabled = false;
+    tuneSizeControls(img);
+    if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+    generateCuts();
+  });
+});
+
+controls.shape.addEventListener("change", () => {
+  maskUploadWrap.hidden = controls.shape.value !== "custom";
+  if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+  generateCuts();
+});
+
+controls.lockRatio.addEventListener("change", () => {
+  if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+  generateCuts();
+});
+
+for (const id of ["minW", "maxW"]) {
+  controls[id].addEventListener("input", () => {
+    if (controls.lockRatio.checked) syncLockedHeightFromWidth();
+    syncOutputs();
+    generateCuts();
+  });
+}
+for (const id of ["minH", "maxH"]) {
+  controls[id].addEventListener("input", () => {
+    if (controls.lockRatio.checked) syncLockedWidthFromHeight();
+    syncOutputs();
+    generateCuts();
+  });
+}
+
+for (const id of ["count", "scatter", "rotation", "margin"]) {
+  controls[id].addEventListener("input", () => {
+    syncOutputs();
+    generateCuts();
+  });
+}
+
+for (const id of ["showHoles", "outline", "holeMode"]) {
+  controls[id].addEventListener("change", render);
+}
 
 randomizeBtn.addEventListener("click", generateCuts);
 fitButton.addEventListener("click", fitCanvas);
 window.addEventListener("resize", fitCanvas);
-
-Object.entries(controls).forEach(([key, el]) => {
-  const eventName = el.type === "range" ? "input" : "change";
-  el.addEventListener(eventName, () => {
-    syncOutputs();
-
-    // Geometry-changing controls need fresh coordinates.
-    if (["count", "minSize", "maxSize", "scatter", "rotation", "margin"].includes(key)) {
-      generateCuts();
-    } else {
-      render();
-    }
-  });
-});
 
 downloadBtn.addEventListener("click", () => {
   if (!sourceImage) return;
   canvas.toBlob((blob) => {
     if (!blob) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const href = URL.createObjectURL(blob);
+    a.href = href;
     a.download = `${sourceName}-diecut.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+    setTimeout(() => URL.revokeObjectURL(href), 1500);
   }, "image/png");
 });
