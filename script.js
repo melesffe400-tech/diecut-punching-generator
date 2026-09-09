@@ -96,7 +96,6 @@ function getDimensions() {
 
   const aspect = getMaskAspect();
 
-  // Width is the master value while ratio lock is on.
   minH = Math.max(1, Math.round(minW / aspect));
   maxH = Math.max(1, Math.round(maxW / aspect));
 
@@ -230,40 +229,33 @@ function generateCuts() {
       cut.destRotation = cut.sourceRotation;
     }
   } else if (controls.placement.value === "center") {
-    // 조각을 중앙을 기준으로 촘촘한 행 형태로 정렬한다.
-    const gap = Math.max(8, Math.round(Math.min(sourceImage.width, sourceImage.height) * 0.012));
-    const rows = [];
-    let row = [];
-    let rowWidth = 0;
-    let rowHeight = 0;
-    const maxRowWidth = sourceImage.width * 0.82;
+    const n = generated.length;
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
 
-    for (const cut of generated) {
-      const nextWidth = row.length ? rowWidth + gap + cut.w : cut.w;
-      if (row.length && nextWidth > maxRowWidth) {
-        rows.push({ cuts: row, width: rowWidth, height: rowHeight });
-        row = [];
-        rowWidth = 0;
-        rowHeight = 0;
-      }
-      rowWidth = row.length ? rowWidth + gap + cut.w : cut.w;
-      rowHeight = Math.max(rowHeight, cut.h);
-      row.push(cut);
-    }
-    if (row.length) rows.push({ cuts: row, width: rowWidth, height: rowHeight });
+    const maxW = Math.max(...generated.map(cut => cut.w));
+    const maxH = Math.max(...generated.map(cut => cut.h));
+    const gapX = Math.max(8, Math.round(maxW * 0.22));
+    const gapY = Math.max(8, Math.round(maxH * 0.22));
 
-    const totalHeight = rows.reduce((sum, r) => sum + r.height, 0) + gap * Math.max(0, rows.length - 1);
-    let y = topH + (lowerH - totalHeight) / 2;
+    const gridW = cols * maxW + (cols - 1) * gapX;
+    const gridH = rows * maxH + (rows - 1) * gapY;
 
-    for (const r of rows) {
-      let x = (sourceImage.width - r.width) / 2;
-      for (const cut of r.cuts) {
-        cut.dx = x + cut.w / 2;
-        cut.dy = y + r.height / 2;
-        cut.destRotation = 0;
-        x += cut.w + gap;
-      }
-      y += r.height + gap;
+    const startX = (sourceImage.width - gridW) / 2 + maxW / 2;
+    const startY = topH + (lowerH - gridH) / 2 + maxH / 2;
+
+    for (let i = 0; i < generated.length; i++) {
+      const cut = generated[i];
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+
+      const itemsInRow = row === rows - 1 ? n - row * cols : cols;
+      const rowW = itemsInRow * maxW + Math.max(0, itemsInRow - 1) * gapX;
+      const rowStartX = (sourceImage.width - rowW) / 2 + maxW / 2;
+
+      cut.dx = rowStartX + col * (maxW + gapX);
+      cut.dy = startY + row * (maxH + gapY);
+      cut.destRotation = 0;
     }
   } else {
     for (const cut of generated) {
@@ -337,8 +329,7 @@ function fillCustomHole(cut) {
   }
 
   if (controls.outline.checked) {
-    // 마스크 PNG의 RGB 색상은 절대 사용하지 않고,
-    // 알파(실루엣)만 이용해 중성 회색 테두리를 만든다.
+
     const outlineLayer = document.createElement("canvas");
     outlineLayer.width = canvas.width;
     outlineLayer.height = canvas.height;
@@ -357,7 +348,6 @@ function fillCustomHole(cut) {
       e.drawImage(temp, ox, oy);
     }
 
-    // 확장된 실루엣만 남긴 뒤 중앙 마스크를 빼서 외곽선만 만든다.
     e.globalCompositeOperation = "destination-out";
     e.drawImage(temp, 0, 0);
 
@@ -421,7 +411,7 @@ function drawCustomFragment(cut) {
   ctx.restore();
 
   if (controls.outline.checked) {
-    // 조각 외곽선 역시 마스크의 색은 버리고 알파 실루엣만 사용한다.
+
     const outlinePiece = document.createElement("canvas");
     outlinePiece.width = piece.width + 4;
     outlinePiece.height = piece.height + 4;
@@ -619,7 +609,6 @@ for (const id of ["count", "scatter", "rotation", "margin"]) {
 for (const id of ["showHoles", "outline", "holeMode"]) {
   controls[id].addEventListener("change", render);
 }
-
 
 for (const key of Object.keys(numberInputs)) {
   numberInputs[key].addEventListener("change", () => {
