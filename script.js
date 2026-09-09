@@ -12,6 +12,7 @@ const status = $("status");
 
 const controls = {
   shape: $("shape"),
+  placement: $("placement"),
   count: $("count"),
   minW: $("minW"),
   maxW: $("maxW"),
@@ -26,15 +27,15 @@ const controls = {
   holeMode: $("holeMode"),
 };
 
-const outputs = {
-  count: $("countOut"),
-  minW: $("minWOut"),
-  maxW: $("maxWOut"),
-  minH: $("minHOut"),
-  maxH: $("maxHOut"),
-  scatter: $("scatterOut"),
-  rotation: $("rotationOut"),
-  margin: $("marginOut"),
+const numberInputs = {
+  count: $("countNum"),
+  minW: $("minWNum"),
+  maxW: $("maxWNum"),
+  minH: $("minHNum"),
+  maxH: $("maxHNum"),
+  scatter: $("scatterNum"),
+  rotation: $("rotationNum"),
+  margin: $("marginNum"),
 };
 
 const randomizeBtn = $("randomize");
@@ -48,17 +49,27 @@ let maskCanvas = null;
 let cuts = [];
 let syncingRatio = false;
 
-function syncOutputs() {
-  outputs.count.value = controls.count.value;
-  outputs.minW.value = `${controls.minW.value}px`;
-  outputs.maxW.value = `${controls.maxW.value}px`;
-  outputs.minH.value = `${controls.minH.value}px`;
-  outputs.maxH.value = `${controls.maxH.value}px`;
-  outputs.scatter.value = `${controls.scatter.value}%`;
-  outputs.rotation.value = `${controls.rotation.value}°`;
-  outputs.margin.value = `${controls.margin.value}%`;
+function syncNumberInputs() {
+  for (const key of Object.keys(numberInputs)) {
+    numberInputs[key].value = controls[key].value;
+  }
 }
-syncOutputs();
+syncNumberInputs();
+
+function clampControlValue(key, value) {
+  const el = controls[key];
+  const min = Number(el.min);
+  const max = Number(el.max);
+  const n = Number(value);
+  if (!Number.isFinite(n)) return Number(el.value);
+  return Math.min(max, Math.max(min, n));
+}
+
+function syncFromNumber(key) {
+  const value = clampControlValue(key, numberInputs[key].value);
+  controls[key].value = value;
+  numberInputs[key].value = value;
+}
 
 function rand(min, max) {
   return min + Math.random() * (max - min);
@@ -98,7 +109,7 @@ function syncLockedHeightFromWidth() {
   const aspect = getMaskAspect();
   controls.minH.value = Math.min(Number(controls.minH.max), Math.max(Number(controls.minH.min), Math.round(Number(controls.minW.value) / aspect)));
   controls.maxH.value = Math.min(Number(controls.maxH.max), Math.max(Number(controls.maxH.min), Math.round(Number(controls.maxW.value) / aspect)));
-  syncOutputs();
+  syncNumberInputs();
   syncingRatio = false;
 }
 
@@ -108,7 +119,7 @@ function syncLockedWidthFromHeight() {
   const aspect = getMaskAspect();
   controls.minW.value = Math.min(Number(controls.minW.max), Math.max(Number(controls.minW.min), Math.round(Number(controls.minH.value) * aspect)));
   controls.maxW.value = Math.min(Number(controls.maxW.max), Math.max(Number(controls.maxW.min), Math.round(Number(controls.maxH.value) * aspect)));
-  syncOutputs();
+  syncNumberInputs();
   syncingRatio = false;
 }
 
@@ -183,9 +194,11 @@ function generateCuts() {
 
   const marginPx = Math.min(sourceImage.width, sourceImage.height) * Number(controls.margin.value) / 100;
   const topH = sourceImage.height;
-  const scatterH = Math.round(topH * Number(controls.scatter.value) / 100);
+  const lowerH = topH;
+  const spreadH = lowerH * Number(controls.scatter.value) / 100;
+  const spreadTop = topH + (lowerH - spreadH) / 2;
 
-  cuts = Array.from({ length: count }, () => {
+  const generated = Array.from({ length: count }, () => {
     let w = rand(minW, maxW);
     let h;
 
@@ -201,16 +214,70 @@ function generateCuts() {
     const sx = rand(safeX, Math.max(safeX, sourceImage.width - safeX));
     const sy = rand(safeY, Math.max(safeY, sourceImage.height - safeY));
 
-    const dx = rand(w * 0.6, Math.max(w * 0.6, sourceImage.width - w * 0.6));
-    const dy = topH + rand(h * 0.6, Math.max(h * 0.6, scatterH - h * 0.6));
-
     return {
-      sx, sy, dx, dy, w, h,
+      sx, sy, w, h,
       sourceRotation: rand(-10, 10) * Math.PI / 180,
       destRotation: rand(-Number(controls.rotation.value), Number(controls.rotation.value)) * Math.PI / 180,
+      dx: 0,
+      dy: 0,
     };
   });
 
+  if (controls.placement.value === "same") {
+    for (const cut of generated) {
+      cut.dx = cut.sx;
+      cut.dy = topH + cut.sy;
+      cut.destRotation = cut.sourceRotation;
+    }
+  } else if (controls.placement.value === "center") {
+    // 조각을 중앙을 기준으로 촘촘한 행 형태로 정렬한다.
+    const gap = Math.max(8, Math.round(Math.min(sourceImage.width, sourceImage.height) * 0.012));
+    const rows = [];
+    let row = [];
+    let rowWidth = 0;
+    let rowHeight = 0;
+    const maxRowWidth = sourceImage.width * 0.82;
+
+    for (const cut of generated) {
+      const nextWidth = row.length ? rowWidth + gap + cut.w : cut.w;
+      if (row.length && nextWidth > maxRowWidth) {
+        rows.push({ cuts: row, width: rowWidth, height: rowHeight });
+        row = [];
+        rowWidth = 0;
+        rowHeight = 0;
+      }
+      rowWidth = row.length ? rowWidth + gap + cut.w : cut.w;
+      rowHeight = Math.max(rowHeight, cut.h);
+      row.push(cut);
+    }
+    if (row.length) rows.push({ cuts: row, width: rowWidth, height: rowHeight });
+
+    const totalHeight = rows.reduce((sum, r) => sum + r.height, 0) + gap * Math.max(0, rows.length - 1);
+    let y = topH + (lowerH - totalHeight) / 2;
+
+    for (const r of rows) {
+      let x = (sourceImage.width - r.width) / 2;
+      for (const cut of r.cuts) {
+        cut.dx = x + cut.w / 2;
+        cut.dy = y + r.height / 2;
+        cut.destRotation = 0;
+        x += cut.w + gap;
+      }
+      y += r.height + gap;
+    }
+  } else {
+    for (const cut of generated) {
+      const safeDX = cut.w * 0.6;
+      const safeDY = cut.h * 0.6;
+      cut.dx = rand(safeDX, Math.max(safeDX, sourceImage.width - safeDX));
+      cut.dy = spreadTop + rand(
+        safeDY,
+        Math.max(safeDY, spreadH - safeDY)
+      );
+    }
+  }
+
+  cuts = generated;
   render();
 }
 
@@ -389,8 +456,8 @@ function render() {
 
   const W = sourceImage.width;
   const topH = sourceImage.height;
-  const scatterH = Math.max(1, Math.round(topH * Number(controls.scatter.value) / 100));
-  const H = topH + scatterH;
+  const lowerH = topH;
+  const H = topH + lowerH;
 
   canvas.width = W;
   canvas.height = H;
@@ -431,14 +498,20 @@ function tuneSizeControls(img) {
   const minDefault = Math.max(8, Math.round(base * 0.035));
   const maxDefault = Math.max(minDefault + 6, Math.round(base * 0.08));
 
-  for (const id of ["minW", "minH"]) controls[id].max = Math.max(120, Math.round(base * 0.28));
-  for (const id of ["maxW", "maxH"]) controls[id].max = Math.max(200, Math.round(base * 0.40));
+  for (const id of ["minW", "minH"]) {
+    controls[id].max = Math.max(120, Math.round(base * 0.28));
+    numberInputs[id].max = controls[id].max;
+  }
+  for (const id of ["maxW", "maxH"]) {
+    controls[id].max = Math.max(200, Math.round(base * 0.40));
+    numberInputs[id].max = controls[id].max;
+  }
 
   controls.minW.value = minDefault;
   controls.maxW.value = maxDefault;
   controls.minH.value = minDefault;
   controls.maxH.value = maxDefault;
-  syncOutputs();
+  syncNumberInputs();
 }
 
 function loadImageFile(file, onLoaded) {
@@ -514,6 +587,8 @@ controls.shape.addEventListener("change", () => {
   generateCuts();
 });
 
+controls.placement.addEventListener("change", generateCuts);
+
 controls.lockRatio.addEventListener("change", () => {
   if (controls.lockRatio.checked) syncLockedHeightFromWidth();
   generateCuts();
@@ -522,27 +597,48 @@ controls.lockRatio.addEventListener("change", () => {
 for (const id of ["minW", "maxW"]) {
   controls[id].addEventListener("input", () => {
     if (controls.lockRatio.checked) syncLockedHeightFromWidth();
-    syncOutputs();
+    syncNumberInputs();
     generateCuts();
   });
 }
 for (const id of ["minH", "maxH"]) {
   controls[id].addEventListener("input", () => {
     if (controls.lockRatio.checked) syncLockedWidthFromHeight();
-    syncOutputs();
+    syncNumberInputs();
     generateCuts();
   });
 }
 
 for (const id of ["count", "scatter", "rotation", "margin"]) {
   controls[id].addEventListener("input", () => {
-    syncOutputs();
+    syncNumberInputs();
     generateCuts();
   });
 }
 
 for (const id of ["showHoles", "outline", "holeMode"]) {
   controls[id].addEventListener("change", render);
+}
+
+
+for (const key of Object.keys(numberInputs)) {
+  numberInputs[key].addEventListener("change", () => {
+    syncFromNumber(key);
+
+    if ((key === "minW" || key === "maxW") && controls.lockRatio.checked) {
+      syncLockedHeightFromWidth();
+    }
+    if ((key === "minH" || key === "maxH") && controls.lockRatio.checked) {
+      syncLockedWidthFromHeight();
+    }
+
+    syncNumberInputs();
+    generateCuts();
+  });
+
+  numberInputs[key].addEventListener("keydown", (e) => {
+    if (e.key === "Enter") numberInputs[key].blur();
+  });
 }
 
 randomizeBtn.addEventListener("click", generateCuts);

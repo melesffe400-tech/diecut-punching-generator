@@ -14,7 +14,7 @@
         <p class="eyebrow">BROWSER-ONLY IMAGE TOOL</p>
         <h1>Random Die-Cut Generator</h1>
         <p class="sub">
-          이미지를 올리면 원본에 랜덤 펀칭을 만들고, 잘려 나온 조각을 아래에 흩뿌려 PNG로 저장합니다.
+          이미지를 올리면 원본과 같은 크기의 종이를 아래에 만들고, 잘려 나온 조각을 원하는 방식으로 배치해 PNG로 저장합니다.
         </p>
       </div>
       <div class="privacy">이미지는 서버로 전송되지 않습니다.</div>
@@ -46,10 +46,19 @@
             <span class="mask-desc" id="maskStatus">투명 배경 PNG의 불투명 영역을 모양으로 사용합니다.</span>
           </label>
 
+          <div class="control-row">
+            <label for="placement">하단 조각 배치</label>
+            <select id="placement">
+              <option value="random">랜덤</option>
+              <option value="same">원본 펀칭 위치와 동일</option>
+              <option value="center">가운데 정렬</option>
+            </select>
+          </div>
+
           <div class="control">
             <div class="control-head">
               <label for="count">조각 개수</label>
-              <output id="countOut">24</output>
+              <input id="countNum" class="num-input" type="number" min="4" max="80" value="24" />
             </div>
             <input id="count" type="range" min="4" max="80" value="24" />
           </div>
@@ -58,7 +67,7 @@
             <div class="control">
               <div class="control-head">
                 <label for="minW">가로 최소</label>
-                <output id="minWOut">24px</output>
+                <div class="num-unit"><input id="minWNum" class="num-input" type="number" min="8" max="240" value="24" /><span>px</span></div>
               </div>
               <input id="minW" type="range" min="8" max="240" value="24" />
             </div>
@@ -66,7 +75,7 @@
             <div class="control">
               <div class="control-head">
                 <label for="maxW">가로 최대</label>
-                <output id="maxWOut">56px</output>
+                <div class="num-unit"><input id="maxWNum" class="num-input" type="number" min="12" max="320" value="56" /><span>px</span></div>
               </div>
               <input id="maxW" type="range" min="12" max="320" value="56" />
             </div>
@@ -74,7 +83,7 @@
             <div class="control">
               <div class="control-head">
                 <label for="minH">세로 최소</label>
-                <output id="minHOut">24px</output>
+                <div class="num-unit"><input id="minHNum" class="num-input" type="number" min="8" max="240" value="24" /><span>px</span></div>
               </div>
               <input id="minH" type="range" min="8" max="240" value="24" />
             </div>
@@ -82,7 +91,7 @@
             <div class="control">
               <div class="control-head">
                 <label for="maxH">세로 최대</label>
-                <output id="maxHOut">56px</output>
+                <div class="num-unit"><input id="maxHNum" class="num-input" type="number" min="12" max="320" value="56" /><span>px</span></div>
               </div>
               <input id="maxH" type="range" min="12" max="320" value="56" />
             </div>
@@ -95,16 +104,16 @@
 
           <div class="control">
             <div class="control-head">
-              <label for="scatter">아래 흩뿌림 높이</label>
-              <output id="scatterOut">62%</output>
+              <label for="scatter">하단 배치 높이 범위</label>
+              <div class="num-unit"><input id="scatterNum" class="num-input" type="number" min="10" max="100" value="62" /><span>%</span></div>
             </div>
-            <input id="scatter" type="range" min="20" max="120" value="62" />
+            <input id="scatter" type="range" min="10" max="100" value="62" />
           </div>
 
           <div class="control">
             <div class="control-head">
               <label for="rotation">회전 랜덤</label>
-              <output id="rotationOut">35°</output>
+              <div class="num-unit"><input id="rotationNum" class="num-input" type="number" min="0" max="180" value="35" /><span>°</span></div>
             </div>
             <input id="rotation" type="range" min="0" max="180" value="35" />
           </div>
@@ -112,7 +121,7 @@
           <div class="control">
             <div class="control-head">
               <label for="margin">가장자리 여백</label>
-              <output id="marginOut">5%</output>
+              <div class="num-unit"><input id="marginNum" class="num-input" type="number" min="0" max="20" value="5" /><span>%</span></div>
             </div>
             <input id="margin" type="range" min="0" max="20" value="5" />
           </div>
@@ -144,7 +153,7 @@
         </div>
 
         <p class="tip">
-          사용자 PNG는 투명 배경을 권장합니다. 비율 유지가 켜져 있으면 원은 원형을 유지하고, 사용자 PNG는 원본 비율을 유지합니다.
+          하단 종이는 원본 이미지와 정확히 같은 크기입니다. ‘하단 배치 높이 범위’는 랜덤 배치 시 종이 안에서 조각이 퍼지는 세로 범위를 조절합니다.
         </p>
       </aside>
 
