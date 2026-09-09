@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6f4ee" />
+  <title>Random Die-Cut Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">BROWSER-ONLY IMAGE TOOL</p>
+        <h1>Random Die-Cut Generator</h1>
+        <p class="sub">
+          이미지를 올리면 원본에 랜덤 펀칭을 만들고, 잘려 나온 조각을 아래에 흩뿌려 PNG로 저장합니다.
+        </p>
+      </div>
+      <div class="privacy">이미지는 서버로 전송되지 않습니다.</div>
+    </header>
+
+    <section class="workspace">
+      <aside class="panel">
+        <label class="upload" id="dropZone">
+          <input id="fileInput" type="file" accept="image/*" />
+          <span class="upload-title">이미지 업로드</span>
+          <span class="upload-desc">클릭하거나 파일을 끌어놓으세요</span>
+        </label>
+
+        <div class="controls">
+          <div class="control-row">
+            <label for="shape">펀칭 모양</label>
+            <select id="shape">
+              <option value="drop">물방울</option>
+              <option value="circle">원</option>
+              <option value="diamond">마름모</option>
+              <option value="star">별</option>
+            </select>
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="count">조각 개수</label>
+              <output id="countOut">24</output>
+            </div>
+            <input id="count" type="range" min="4" max="80" value="24" />
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="minSize">최소 크기</label>
+              <output id="minSizeOut">22px</output>
+            </div>
+            <input id="minSize" type="range" min="8" max="80" value="22" />
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="maxSize">최대 크기</label>
+              <output id="maxSizeOut">52px</output>
+            </div>
+            <input id="maxSize" type="range" min="16" max="140" value="52" />
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="scatter">아래 흩뿌림 높이</label>
+              <output id="scatterOut">62%</output>
+            </div>
+            <input id="scatter" type="range" min="20" max="120" value="62" />
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="rotation">회전 랜덤</label>
+              <output id="rotationOut">35°</output>
+            </div>
+            <input id="rotation" type="range" min="0" max="180" value="35" />
+          </div>
+
+          <div class="control">
+            <div class="control-head">
+              <label for="margin">가장자리 여백</label>
+              <output id="marginOut">5%</output>
+            </div>
+            <input id="margin" type="range" min="0" max="20" value="5" />
+          </div>
+
+          <div class="toggle-row">
+            <label>
+              <input id="showHoles" type="checkbox" checked />
+              <span>원본에 펀칭 표시</span>
+            </label>
+            <label>
+              <input id="outline" type="checkbox" checked />
+              <span>펀칭 테두리</span>
+            </label>
+          </div>
+
+          <div class="control-row">
+            <label for="holeMode">펀칭 배경</label>
+            <select id="holeMode">
+              <option value="paper">종이색</option>
+              <option value="white">흰색</option>
+              <option value="transparent">투명</option>
+            </select>
+          </div>
+
+          <div class="buttons">
+            <button id="randomize" class="primary" disabled>다시 랜덤</button>
+            <button id="download" disabled>PNG 저장</button>
+          </div>
+        </div>
+
+        <p class="tip">
+          같은 설정에서도 “다시 랜덤”을 누를 때마다 위치·크기·회전이 새로 생성됩니다.
+        </p>
+      </aside>
+
+      <section class="preview-wrap">
+        <div class="preview-toolbar">
+          <span id="status">이미지를 업로드해 주세요.</span>
+          <button id="fitButton" class="ghost" disabled>화면에 맞춤</button>
+        </div>
+        <div class="canvas-shell" id="canvasShell">
+          <canvas id="canvas" width="1200" height="900"></canvas>
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">◇</div>
+            <strong>여기에 결과가 표시됩니다</strong>
+            <span>JPG, PNG, WEBP 등 이미지 파일을 사용할 수 있어요.</span>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
