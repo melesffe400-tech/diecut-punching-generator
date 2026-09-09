@@ -270,17 +270,33 @@ function fillCustomHole(cut) {
   }
 
   if (controls.outline.checked) {
-    // Soft outline via mask expansion approximation.
-    ctx.save();
-    ctx.globalAlpha = 0.28;
-    ctx.globalCompositeOperation = "source-over";
-    const offsets = [[-1,0],[1,0],[0,-1],[0,1]];
+    // 마스크 PNG의 RGB 색상은 절대 사용하지 않고,
+    // 알파(실루엣)만 이용해 중성 회색 테두리를 만든다.
+    const outlineLayer = document.createElement("canvas");
+    outlineLayer.width = canvas.width;
+    outlineLayer.height = canvas.height;
+    const o = outlineLayer.getContext("2d");
+
+    o.fillStyle = "rgba(70, 68, 63, .28)";
+    o.fillRect(0, 0, outlineLayer.width, outlineLayer.height);
+    o.globalCompositeOperation = "destination-in";
+
+    const expandedMask = document.createElement("canvas");
+    expandedMask.width = canvas.width;
+    expandedMask.height = canvas.height;
+    const e = expandedMask.getContext("2d");
+    const offsets = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
     for (const [ox, oy] of offsets) {
-      ctx.drawImage(temp, ox, oy);
+      e.drawImage(temp, ox, oy);
     }
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.drawImage(temp, 0, 0);
-    ctx.restore();
+
+    // 확장된 실루엣만 남긴 뒤 중앙 마스크를 빼서 외곽선만 만든다.
+    e.globalCompositeOperation = "destination-out";
+    e.drawImage(temp, 0, 0);
+
+    o.drawImage(expandedMask, 0, 0);
+    o.globalCompositeOperation = "source-over";
+    ctx.drawImage(outlineLayer, 0, 0);
   }
 }
 
@@ -338,16 +354,32 @@ function drawCustomFragment(cut) {
   ctx.restore();
 
   if (controls.outline.checked) {
+    // 조각 외곽선 역시 마스크의 색은 버리고 알파 실루엣만 사용한다.
+    const outlinePiece = document.createElement("canvas");
+    outlinePiece.width = piece.width + 4;
+    outlinePiece.height = piece.height + 4;
+    const op = outlinePiece.getContext("2d");
+
+    const alphaShape = document.createElement("canvas");
+    alphaShape.width = outlinePiece.width;
+    alphaShape.height = outlinePiece.height;
+    const ap = alphaShape.getContext("2d");
+    const offsets = [[1,2],[3,2],[2,1],[2,3],[1,1],[3,1],[1,3],[3,3]];
+    for (const [ox, oy] of offsets) {
+      ap.drawImage(mask, ox, oy, piece.width, piece.height);
+    }
+    ap.globalCompositeOperation = "destination-out";
+    ap.drawImage(mask, 2, 2, piece.width, piece.height);
+
+    op.fillStyle = "rgba(70, 68, 63, .24)";
+    op.fillRect(0, 0, outlinePiece.width, outlinePiece.height);
+    op.globalCompositeOperation = "destination-in";
+    op.drawImage(alphaShape, 0, 0);
+
     ctx.save();
     ctx.translate(cut.dx, cut.dy);
     ctx.rotate(cut.destRotation);
-    ctx.globalAlpha = 0.22;
-    ctx.drawImage(mask, -cut.w / 2 - 1, -cut.h / 2, cut.w, cut.h);
-    ctx.drawImage(mask, -cut.w / 2 + 1, -cut.h / 2, cut.w, cut.h);
-    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2 - 1, cut.w, cut.h);
-    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2 + 1, cut.w, cut.h);
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.drawImage(mask, -cut.w / 2, -cut.h / 2, cut.w, cut.h);
+    ctx.drawImage(outlinePiece, -cut.w / 2 - 2, -cut.h / 2 - 2, cut.w + 4, cut.h + 4);
     ctx.restore();
   }
 }
