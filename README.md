@@ -33,16 +33,6 @@
 5. 필요하면 다시 랜덤으로 생성합니다.
 6. PNG 저장 버튼으로 결과를 저장합니다.
 
-## GitHub Pages 배포
-
-저장소 최상위에 아래 파일을 업로드합니다.
-
-- `index.html`
-- `style.css`
-- `script.js`
-
-GitHub에서 `Settings → Pages → Deploy from a branch → main → /(root)`를 선택하면 배포할 수 있습니다.
-
 ## Privacy
 
 업로드한 이미지는 외부 서버로 전송되지 않으며 브라우저 내부에서만 처리됩니다.
